@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: The Klimpi Authors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# Served at the root of samples.klimpi.app, the bucket holding the recordings of a real
+# piano. Opus files and the manifest indexing them, and nothing else: no pages, no text,
+# nothing a search result or a generated answer could quote.
+#
+# A crawler that renders a practice page starts the app, and the app fetches recordings
+# while it plays, so an unmarked bucket is taken a note at a time by anything that runs
+# JavaScript — tens of gigabytes neither side has a use for.
+#
+# This governs crawlers alone. A browser fetching the assets of the page it is showing has
+# never been subject to robots.txt, so a player hears exactly what they heard before.
+User-agent: *
+Disallow: /
