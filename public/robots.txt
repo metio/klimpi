@@ -2,4 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 User-agent: *
 Allow: /
+
+# Apple's opt-out from training a model on what it has crawled. Applebot-Extended
+# fetches nothing of its own, so this changes no request Apple makes and frees no
+# bandwidth; it governs only what Apple may do with pages Applebot already holds.
+#
+# Applebot itself stays allowed, deliberately. It is what puts Klimpi in Siri and
+# Spotlight, and a search result is how a player arrives.
+User-agent: Applebot-Extended
+Disallow: /
+
 Sitemap: https://klimpi.app/sitemap.xml
