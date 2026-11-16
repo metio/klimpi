@@ -14,7 +14,14 @@ configured the app behaves exactly as it does now, and every gate still passes.
 This document is the design and the implementation plan. It is maintained
 alongside the code — see [Maintaining this document](#maintaining-this-document).
 
-**Status: planned.** No endpoint, Worker or database exists. Three `core/` changes
+**Status: planned, and the runtime changed on 2026-11-16.** No endpoint, server or
+database exists. The API moves from Cloudflare Workers to containers on a Kubernetes
+cluster of our own; [Runtime](#runtime-containers-on-kubernetes) states the decision,
+what it deletes from the sections below, and what it adds. Sections written against
+Workers are marked where they are superseded rather than rewritten, because a reader
+who cannot see an abandoned path will propose it again.
+
+Three `core/` changes
 phase 1 depends on shipped on 2026-08-26 and are marked where they are described:
 the assignment `origin`, the report parser's caps, and per-assignment grouping in
 `/collect`. Each stands on its own in the client-only app; none of them talks to
@@ -36,6 +43,7 @@ not return without meeting the argument.
 - [Scope](#scope)
 - [Invariants](#invariants)
 - [Platform choice](#platform-choice)
+- [Runtime: containers on Kubernetes](#runtime-containers-on-kubernetes)
 - [Free-tier budget](#free-tier-budget)
 - [Topology](#topology)
 - [Repository layout](#repository-layout)
@@ -95,9 +103,10 @@ carries obligations far larger than its feature surface, and each is recorded in
 the backend ledger rather than here.
 
 Also out of scope: moving the score-ingestion pipeline to the server. `music21`,
-MuseScore CLI, Verovio and LilyPond need a filesystem, Python and far more than
-10 ms of CPU. Ingestion stays a build-time `dev/*.mts` and GitHub Actions concern;
-the backend only ever serves its output.
+MuseScore CLI, Verovio and LilyPond need a filesystem, Python and a build environment.
+The CPU argument that used to stand beside that one went with the Workers runtime;
+this half did not. Ingestion stays a build-time `dev/*.mts` and GitHub Actions
+concern; the backend only ever serves its output.
 
 ## Invariants
 
@@ -134,6 +143,12 @@ change to this document first.
 
 ## Platform choice
 
+**Superseded for the API on 2026-11-16 — see
+[Runtime](#runtime-containers-on-kubernetes).** Cloudflare still serves the website,
+the DNS, the WAF and the sample recordings, and the reasoning below is why it was
+chosen for everything in August 2026. It is kept because the alternatives it weighs
+are the alternatives a later reader will weigh again.
+
 Cloudflare, on the free tier. Three reasons, in order of weight.
 
 **The account and the domain are already there.** Preview deploys run on
@@ -158,11 +173,85 @@ the opposite of the no-accounts posture, and the free tiers are the ones most
 prone to change); extending Sanity (a content CMS, unsuited to per-run writes —
 and since removed from Klimpi altogether).
 
+## Runtime: containers on Kubernetes
+
+**Decided 2026-11-16.** The API runs as containers on a Kubernetes cluster we operate,
+with PostgreSQL through CloudNativePG and S3-compatible object storage. Cloudflare
+keeps the website, the DNS, the WAF and `samples.klimpi.app`.
+
+**What changed is the reasoning, not the facts.** [Platform choice](#platform-choice)
+rejected a VPS because it meant "a machine to patch, back up and pay for". That
+objection was sound, and it is now paid for other reasons: a cluster exists for work
+unrelated to Klimpi, so the marginal cost of a backend on it is one Deployment and one
+database rather than a new operational discipline. A decision whose premise stops
+holding is one to re-argue rather than inherit.
+
+**It was not the request budget, and recording that matters.** The free Workers
+allowance is 100,000 requests a day and this document projects about 2,000 for the
+whole backend at early scale. The allowance is nearly spent before the API exists
+because `functions/_middleware.js` writes the website's edge documents on the same
+meter — about 97,000 a day for one complete crawl of the sitemap. That is a website
+problem with a website answer, and re-architecting the API for it would be the wrong
+fix for a real symptom.
+
+Three things decide it instead.
+
+**The 10 ms CPU ceiling goes, and a class of workaround goes with it.** It applies to
+every invocation type, cron triggers and queue consumers included, and unzipping and
+fingerprinting one ordinary catalogue score measures about 50 ms. That single number
+is why [catalogue submission](#capability-catalogue-submission) could only store bytes
+and defer the real work to a scheduled Actions job, why no MusicXML is parsed in any
+request path, and why the retention sweep had to be chunked and resumable. On a
+container the work happens where the upload arrives.
+
+**PostgreSQL removes the shape D1 imposed.** The free plan allows 50 queries per
+invocation, counted per statement inside a batch, which turns a vault's first sync into
+a chunked multi-request protocol — this document calls that "a protocol requirement
+rather than an optimisation". It becomes one transaction. The 500 MB per-database
+ceiling and the index-doubling write accounting stop being design inputs with it.
+
+**Where the data sits becomes an argument we can make.** A German Musikschule is
+Verantwortliche and any vendor is Auftragsverarbeiter, so an Art. 28 processing
+agreement is mandatory and a transfer to a US provider needs documented Art. 44
+safeguards. The German products in this market advertise a German data centre; a survey
+of the US practice apps in November 2026 found none naming a DPA or an EU storage
+location anywhere. Hosting in Germany on hardware we rent turns the longest item in
+[Privacy and law](#privacy-and-law) from a disclosure into a selling point.
+
+**What it costs.** One obligation Cloudflare carried and we now carry: backups, and the
+restore drills that make them real. Local storage remains the source of truth for a
+player (invariant 6), so a lost vault costs them nothing they still hold — but a
+school's collected results are the thing a school is paying for, and nothing else holds
+a copy.
+
+**What survives unchanged.** Everything in [Client architecture](#client-architecture):
+the ports, the adapters, the `core/` parsers used in both directions, the inert fakes,
+the feature flags. `worker/src` as it stands imports no Cloudflare API at all — the
+handler takes a `Request` and returns a `Response`, and the rule that it receives its
+environment as an argument rather than reading module scope is what makes it
+runtime-agnostic. The directory keeps its name for now; renaming it is churn with no
+reader it helps.
+
+**What is superseded below.** [Free-tier budget](#free-tier-budget) stops being the
+assumption the plan rests on. The CPU discipline in
+[Worker architecture](#worker-architecture), the `--jurisdiction=eu` one-way door in
+[Data model](#data-model) and [Privacy and law](#privacy-and-law), the Durable Object
+limiter in [Security](#security), and most of [Operations](#operations) are each marked
+where they stand.
+
 ## Free-tier budget
 
+**Superseded for the API on 2026-11-16 — see
+[Runtime](#runtime-containers-on-kubernetes).** It is kept in full because it records
+what the Cloudflare design was sized against, and because parts of it still bind:
+Workers and Pages Functions share one daily allowance, which is what the website's edge
+middleware spends; R2 still serves
+[the recorded piano](#capability-the-recorded-piano); and the reasoning about which
+product can carry a write path is the reasoning any future platform question needs.
+
 Verified against Cloudflare's documentation on 2026-08-09. Re-verify before each
-phase — free-tier terms move, and this table is the assumption the whole plan
-rests on.
+phase — free-tier terms move, and this table was the assumption the whole plan
+rested on.
 
 | Product | Free allowance | Used for |
 | --- | --- | --- |
@@ -267,13 +356,21 @@ differs sharply: Option A cannot break the website, Option B can. Revisit when
 either the request budget or the vault's chattier traffic makes it worth the risk,
 and treat it as its own change with its own rollback plan.
 
+**The separate origin survives the runtime change, and its reasoning gets simpler.**
+`api.klimpi.app` is a DNS record pointing at the cluster's ingress, proxied through
+Cloudflare so the WAF and the DDoS shield sit in front without a Worker on the route,
+or reached through a Cloudflare Tunnel where the ingress should not be public. Option B
+was always implemented by a Pages Function, which is the one thing the new runtime
+exists to avoid, so it is **declined rather than reconsidered at phase 4**. The CORS
+preflight is still the price, and it is no longer weighed against a daily allowance.
+
 Environments:
 
-| Environment | Worker | Data | Client reaches it via |
+| Environment | Runs | Data | Client reaches it via |
 | --- | --- | --- | --- |
-| Production | `klimpi-api` | D1 `klimpi`, R2 `klimpi-vault` | `VITE_API_BASE=https://api.klimpi.app` |
-| Preview | `klimpi-api-preview` | D1 `klimpi-preview`, R2 `klimpi-vault-preview` | Set per preview deploy |
-| Local | `wrangler dev` | Local D1 and R2 emulation | `.env.local` |
+| Production | `klimpi-api` Deployment | Postgres `klimpi` (CNPG), bucket `klimpi-vault` | `VITE_API_BASE=https://api.klimpi.app` |
+| Preview | `klimpi-api-preview`, its own namespace | Postgres `klimpi-preview`, bucket `klimpi-vault-preview` | Set per preview deploy |
+| Local | `npm run dev` in `worker/` | A Postgres container and a MinIO container | `.env.local` |
 
 Preview and production must never share a database. Preview branches are
 disposable and per-branch previews already get distinct origins specifically so
@@ -296,15 +393,16 @@ should go looking for the example.
 ```text
 worker/
   package.json          # its own dependencies; not the root ones
-  tsconfig.json         # @cloudflare/workers-types, no DOM lib
-  wrangler.toml         # bindings, routes, environments
+  tsconfig.json         # server types, no DOM lib
+  wrangler.toml         # the Workers deployment phase 0 shipped; a
+                        # Containerfile replaces it under the new runtime
   src/
     index.ts            # the fetch handler and router
     routes/             # one module per endpoint
     lib/                # request parsing, responses, rate limiting
-    limiter.ts          # the rate-limiter Durable Object
-  migrations/           # D1 schema, applied in order
-  test/                 # vitest, workerd pool
+    limiter.ts          # the rate limiter
+  migrations/           # schema, applied in order
+  test/                 # vitest
 ```
 
 The worker imports `core/` by relative path and nothing else from the repository.
@@ -402,7 +500,9 @@ compiler catches a miss in any of the three places.
 
 ## Worker architecture
 
-The same layering, one direction of dependency, for the same reason.
+The heading is historical and the shape is not: the handler is runtime-agnostic, and
+what follows is what a container runs too. The same layering, one direction of
+dependency, for the same reason.
 
 ```text
 index.ts  ──▶  routes/  ──▶  lib/  ──▶  core/   (core has no outward edges)
@@ -438,13 +538,12 @@ Error codes are a closed set — `bad_request`, `unauthorized`, `not_found`,
 contract. The client maps unknown codes to the same behaviour as `internal`,
 so adding a code is not a breaking change.
 
-**CPU discipline.** The 10 ms budget is per request and is not generous. Each
-handler declares its worst case in a comment, and the load test in
-[Testing](#testing) measures it. Two rules keep handlers inside it: no unbounded
-loop over user-supplied data without an explicit cap, and no parsing of a
-MusicXML document in a request path. Score validation at submission time is done
-by size, extension and a cheap structural check; full parsing happens in the
-moderation step, off the request path.
+**CPU discipline — superseded 2026-11-16.** The 10 ms budget was per invocation and
+was not generous, and it shaped several decisions below before the runtime changed. A
+container has no such ceiling, so a handler may parse a MusicXML document and catalogue
+submission may fingerprint what it receives. Half the rule survives on its own merits:
+no unbounded loop over user-supplied data without an explicit cap, which is an
+availability control rather than a budget one.
 
 ## Identity
 
@@ -664,15 +763,19 @@ discipline the harvest pipeline already applies.
 capping the read before the write. The extension must be `.mxl` or `.musicxml`.
 Structural validation happens in moderation.
 
-**Moderation runs in GitHub Actions, not in a Worker.** Unzipping a score and
-fingerprinting it costs roughly 50 ms of CPU on an ordinary catalogue piece
-against a 10 ms per-invocation ceiling that applies to cron triggers and queue
-consumers exactly as it applies to requests. The Worker therefore stores bytes and
-metadata and does nothing else with them. A scheduled Actions job pulls pending
-objects from R2 and runs the real work in the environment that already has Node,
-`linkedom` and no CPU ceiling — the same argument that keeps score ingestion out
-of the backend entirely. Queues carries the nudge that a submission is waiting,
-which is all its 10k operations/day is spent on.
+**Moderation moved into the service on 2026-11-16.** It ran in GitHub Actions because
+unzipping and fingerprinting one ordinary catalogue score costs roughly 50 ms of CPU
+against a 10 ms per-invocation ceiling that applied to cron triggers and queue consumers
+exactly as it applied to requests, so the Worker could only store bytes and metadata.
+A container has Node, `linkedom` and no ceiling, so structural validation and
+fingerprinting happen where the upload arrives, and the Queues nudge has nothing left
+to carry.
+
+Two things that paragraph decided do not move with it. **Human review stays mandatory** —
+the CC-only policy is a licensing obligation and was never a platform question. And
+**score ingestion stays out of the backend entirely**: `music21`, MuseScore CLI, Verovio
+and LilyPond need a filesystem, Python and a build environment, which is a different
+argument from the CPU one and still holds.
 
 **Deduplication.** `core/songId.ts` is a content fingerprint over the note
 sequence, pure and dependency-free. The client computes it and sends it, and the
@@ -1307,19 +1410,20 @@ answer turns out to be no, nothing was spent finding out.
 
 ## Data model
 
-D1 schema, applied through numbered migrations in `worker/migrations/`. Every
+PostgreSQL schema, applied through numbered migrations in `worker/migrations/`. Every
 table carries an explicit `created_at` and every table with user-supplied content
-carries a retention basis.
+carries a retention basis. The SQL below was written for D1 and reads as SQLite;
+translating it is mechanical, and the one change that is not cosmetic is that Postgres
+gives back a transaction spanning more than one statement, which the vault's first sync
+needs.
 
-**Create every database and bucket with `--jurisdiction=eu`, in phase 0.** D1 and
-R2 both support an EU jurisdiction that guarantees data stays in the region, and
-both accept it **only at creation** — it cannot be added or changed afterwards.
-Getting this wrong is the one genuine one-way door in the plan: a database created
-without it can only be fixed by creating a second one, copying the data and
-swapping a binding on a live API. It applies to preview as much as production,
-because preview databases receive real payloads during testing. A jurisdictional
-R2 bucket is also addressed through a jurisdiction-specific S3 endpoint host,
-which any tooling that talks to it directly must build correctly.
+**The one-way door is gone — 2026-11-16.** The paragraph that stood here required every
+D1 database and R2 bucket to be created `--jurisdiction=eu`, because neither accepts a
+jurisdiction afterwards and preview receives real payloads during testing. On our own
+cluster the data sits where the hardware sits, chosen at rental rather than at creation,
+and changing it is a migration rather than an impossibility. The obligation it was
+protecting is unchanged — see [Privacy and law](#privacy-and-law) — and only the
+mechanism is.
 
 ```sql
 -- Classes: a teacher's collection point. No teacher identity is stored.
@@ -1502,13 +1606,13 @@ Exceeding returns 429 with `Retry-After`. Bucketing IPs by prefix rather than by
 address is what makes the backstop meaningful against an attacker with an address
 range, and coarse enough not to punish a shared network.
 
-**The limiter must state how it fails.** It runs in a Durable Object and shares
-the same exhaustible daily allowance as the endpoints it protects, so its own
-failure is a case the design has to decide rather than discover: **writes fail
-closed** (a write that cannot be rate-limited is refused) and **reads fail open**
-(a read that cannot be rate-limited is served). Reads are limited through a coarse
-counter rather than a per-request DO round-trip, so the expensive path is spent
-only where a write justifies it.
+**The limiter must state how it fails.** It was a Durable Object sharing the daily
+allowance of the endpoints it protected; it is now a counter in the service, and a
+counter in a small shared store once more than one replica runs. The allowance argument
+goes with the runtime and the failure rule stays, because a limiter that fails silently
+in either direction is worse than one that states its choice: **writes fail closed** (a
+write that cannot be rate-limited is refused) and **reads fail open** (a read that
+cannot be rate-limited is served).
 
 **Turnstile** on class creation and on catalogue submission. Free, unlimited
 verifications, no personal data collected, and it stops the automated bulk case
@@ -1567,13 +1671,19 @@ that no raw IP is written into any table in the [data model](#data-model). The
 earlier phrasing — "no IP beyond a transient window" — claimed more than the
 platform allows.
 
-**Cloudflare becomes a processor the moment a visitor's browser calls the API.**
-The health poll alone sends every visitor's IP to a new US-based processor, before
-any opt-in and before any feature exists. The privacy policy therefore needs its API
-section written and published *before* the client makes its first request, naming
-Cloudflare, Inc., the data-processing addendum, the transfer basis, the categories
-(IP and request metadata), the purpose (delivery and abuse control) and the legal
-basis.
+**A processor is engaged the moment a visitor's browser calls the API.** The health
+poll alone sends every visitor's IP to whoever runs the API, before any opt-in and
+before any feature exists. The privacy policy therefore needs its API section written
+and published *before* the client makes its first request, naming the processor, the
+processing agreement, the categories (IP and request metadata), the purpose (delivery
+and abuse control) and the legal basis.
+
+**Which processor it names changed on 2026-11-16.** The API runs on hardware rented in
+Germany, so the processors are the hosting provider and the storage provider holding
+the backups, and there is no third-country transfer to justify for the API itself.
+Cloudflare remains a processor for the website, the DNS and the sample recordings, and
+for API traffic proxied through it — all of which the section still has to say. The
+transfer basis the earlier text required is narrower now rather than absent.
 
 The deadline is the first client-side call rather than the first `wrangler deploy`.
 Phase 0 changes nothing in the client by construction, and a Worker nobody calls
@@ -1606,14 +1716,15 @@ classroom use. It needs an answer from someone qualified to give one.
 processing of children's performance data for an educational purpose sits squarely
 in Art. 35 territory. It is cheap to do early and expensive to retrofit.
 
-**Data residency: use jurisdictions, and set them at creation.** D1 and R2 both
-support an `eu` jurisdiction that guarantees regional storage, as do Durable
-Objects. All three accept it only at creation time, so this is a phase-0 action
-for every database and bucket, production and preview alike. An earlier draft
-concluded that identifiable data had to live in a Durable Object because D1
-offered only a best-effort location hint; that was true before D1 jurisdictions
-existed and is no longer. The corrected rule is simpler: everything is created
-`eu`, and `result` stays in D1 where it can be queried.
+**Data residency: the hardware decides it, and we choose the hardware — 2026-11-16.**
+The text that stood here required an `eu` jurisdiction on every D1 database, R2 bucket
+and Durable Object, settable only at creation; before that, a draft had concluded
+identifiable data must live in a Durable Object because D1 offered only a location
+hint. Both are history. Residency is now a property of where the machines are rented
+and where the backups are written. Two rules replace them: **the backup target is
+chosen for residency as deliberately as the cluster**, because a backup is a copy of
+everything; and preview is held to the same standard as production, because preview
+receives real payloads during testing.
 
 **Rights must reach the data subject, not only the token holder.** Deletion is a
 first-class endpoint — `DELETE /v1/class/:classId` for a class,
@@ -1636,7 +1747,7 @@ the beacon cannot answer a question about a feature.
 
 | Artefact | Blocks |
 | --- | --- |
-| Privacy policy section naming Cloudflare as processor | The client's first API call, not the Worker's first deploy |
+| Privacy policy section naming the hosting and storage processors | The client's first API call, not the first deploy |
 | Controller/processor determination for classroom use | Phase 1 in real classrooms |
 | Processor agreement template for schools | Phase 1 in real classrooms |
 | DPIA covering result collection | Phase 1 in real classrooms |
@@ -1661,10 +1772,10 @@ Every row is a behaviour the client must implement and a test must assert.
 | DNS or connection failure | The offer to submit stays; a retry is offered; nothing else changes |
 | Timeout (10 s) | Same as connection failure; the request aborts rather than hanging |
 | HTTP 429 | A quiet "try again shortly", honouring `Retry-After` |
-| HTTP 1027 (daily limit) | Treated as unavailable; no error text implying the player did wrong |
+| HTTP 1027 (Cloudflare daily limit) | Treated as unavailable; no error text implying the player did wrong. Unreachable once the API leaves Workers, and harmless to keep |
 | HTTP 5xx | Treated as unavailable |
 | Malformed body | Treated as unavailable; the parser returns `null` and nothing throws |
-| An HTML error page instead of JSON | Same as malformed; Cloudflare serves its own 5xx pages and the parser must not assume JSON |
+| An HTML error page instead of JSON | Same as malformed; a proxy or an ingress serves its own 5xx pages and the parser must not assume JSON |
 | A redirect | Not followed for API calls; treated as unavailable |
 | `disabled` in the envelope | The capability's UI hides itself for the session |
 | Health endpoint itself unreachable | Capabilities stay off; unknown means off, never on |
@@ -1687,51 +1798,75 @@ is invariant 1 made executable, and it runs in the node project on every push.
 
 ## Operations
 
-**Deployment.** `wrangler deploy` from a GitHub Actions workflow on push to
-`main`, filtered to `worker/**`, **`core/**`**, `package-lock.json` and the
-workflow file itself. The `core/` path is load-bearing: the website deploy already
-triggers on `core/**`, so filtering the API deploy to `worker/**` alone would ship
-a shared-code change to the browser and never to the Worker, leaving client and
-server running different builds of the one module invariant 7 promises cannot
-drift — invisibly, because both nominally import the same file.
+**Rewritten 2026-11-16 for the container runtime.** This is the section the move
+grows rather than shrinks, and the growth is the honest price of it.
 
-Migrations apply before the Worker rolls, and every migration must be additive,
-because the previous Worker version serves traffic while the new one deploys.
-Dropping a column is a two-phase change across two deploys.
+**Deployment.** A GitHub Actions workflow on push to `main` builds and pushes the
+image, filtered to `worker/**`, **`core/**`**, `package-lock.json` and the workflow
+file itself; Flux reconciles the cluster onto the new tag. The `core/` path is
+load-bearing: the website deploy already triggers on `core/**`, so filtering the API
+deploy to `worker/**` alone would ship a shared-code change to the browser and never
+to the server, leaving client and server running different builds of the one module
+invariant 7 promises cannot drift — invisibly, because both nominally import the same
+file.
 
-**Rollback.** `wrangler rollback` returns to the previous version in seconds.
-A migration is not covered by that, which is the reason for the additive-only
-rule.
+Migrations run as a job ahead of the rollout, and every migration must be additive,
+because the previous version serves traffic while the new one rolls. Dropping a column
+is a two-phase change across two deploys.
 
-**Monitoring.** Workers Logs for errors, a Cloudflare notification on error-rate,
-and a scheduled Worker that writes a daily counter row and alerts when any
-allowance crosses 50%. For Workers the 100k/day cap fails closed, so a runaway
-costs a capability rather than money and 50% leaves time to act.
+**Rollback.** Pin the previous image tag and let Flux reconcile. A migration is not
+covered by that, which is the reason for the additive-only rule.
 
-**R2 is the exception and needs a billing alert, not a quota alert.** It bills
-overage with no spend cap, so the failure mode there is an invoice. A Cloudflare
-billing notification plus the per-endpoint limiter on every R2 write path is what
-stands between a bug and a bill. This is the one place the "free tier fails
-closed" reasoning does not apply, and phases 2 and 4 are the phases that turn it
-on.
+**The database.** PostgreSQL through CloudNativePG. One instance is enough to begin:
+invariant 1 means a backend outage costs a capability rather than breaking the app, so
+the availability bar here is genuinely low. Three instances across three nodes is the
+end state, and CNPG takes availability from Postgres replicas rather than from
+replicated storage, which is why local disks suit it.
 
-**The retention sweep must be resumable and ordered.** A cron invocation carries
-the same 10 ms CPU budget as a request and shares the 100k/day row-write
-allowance, so a large sweep is chunked, bounded per run, and safe to interrupt: it
-deletes R2 objects before the rows naming them, commits in small batches, and
-picks up where it stopped. A half-finished sweep leaves consistent data and less
-of it.
+**Backups are the obligation this runtime adds.** Continuous WAL archiving plus
+periodic base backups to S3-compatible object storage, through CloudNativePG's
+**barman-cloud plugin**. The in-tree `spec.backup.barmanObjectStore` fields were
+deprecated in CNPG 1.26 and are scheduled for removal, so a cluster configured today
+uses the plugin from its first manifest and has nothing to migrate later.
 
-**Runbook.** Four scenarios, each with a decision and an owner action: quota
-exhaustion (turn off the noisiest capability via the health flag), an abusive
+The backup target is a second residency decision, not a detail of the first: a backup
+is a copy of everything. An object store in the same jurisdiction as the cluster keeps
+the processor chain short, and where its S3 API calls are unmetered it also removes the
+one cost that scales with WAL volume. Cloudflare R2 is the alternative, with two
+properties worth stating rather than discovering — it bills rather than failing closed,
+and it puts a US-headquartered processor back into a chain this runtime was partly
+chosen to shorten.
+
+**A backup nobody has restored is a hypothesis.** A restore drill runs at provisioning
+and on a schedule: bootstrap a throwaway `Cluster` from `recovery` against the object
+store and assert it comes up with the expected row counts. It is cheap in CNPG, it is
+the only evidence any of the above works, and it is also the only way to answer the
+question the plugin migration raises and nobody has answered publicly — whether backups
+taken under one configuration stay restorable under the next.
+
+**Monitoring.** Container and Postgres metrics from the cluster's own stack, alerting on
+error rate, pod restarts, replication lag and a volume approaching full. The failure
+shape changed with the runtime, and the alerts follow it: Workers failed closed at a
+daily cap, so a runaway cost a capability and never money; a cluster fails by filling a
+disk or exhausting memory, so what matters is the alert that fires before it does.
+
+**The retention sweep is a scheduled job in the cluster.** It carries no 10 ms CPU
+budget and no shared row-write allowance, so the chunking this document used to require
+is now an ordinary courtesy to the database rather than a constraint. The ordering rule
+stands on its own merits: delete the object before the row that names it, because a row
+pointing at a missing object is a recoverable inconsistency and an object no row names
+is invisible and pays rent forever.
+
+**Runbook.** Five scenarios, each with a decision and an owner action: an abusive
 submitter (delete the object, tighten the Turnstile action), a leaked class token
-(delete the class; the teacher creates a new one), and a bad deploy (roll back,
-then fix forward).
+(delete the class; the teacher creates a new one), a bad deploy (pin the previous tag,
+then fix forward), a database that will not start (restore from the object store, which
+is what the drill rehearses), and a full volume (the alert should have fired first —
+expand it, then find what grew).
 
-**Cost.** Zero at the volumes projected. The escape hatch if any allowance
-pinches is the $5/month Workers Paid plan, which lifts nearly every limit in the
-budget table. That is a deliberate decision to take, not a threshold to cross by
-accident, which is why the alert fires at 50%.
+**Cost.** The cluster is rented for other work, so the marginal cost here is the object
+storage holding the backups and the time to operate the whole of it. The time is the
+real number, and it is the one thing this runtime spends that Workers did not.
 
 ## Testing
 
@@ -1751,8 +1886,10 @@ express: a deletion surviving a round trip, a first sync between two populated
 devices losing nothing, `resetDevice()` not resurrecting state, and
 `importProgress()` winning over the vault copy.
 
-**Worker unit tests.** `@cloudflare/vitest-pool-workers` runs handlers in workerd,
-the real runtime, with D1 and R2 bindings emulated. These run from
+**Server unit tests.** Handlers run under the runtime that will serve them. That was
+workerd through `@cloudflare/vitest-pool-workers`, with D1 and R2 bindings emulated; on
+containers it is Node, with Postgres and object storage from disposable containers.
+Either way they run from
 `worker/vitest.config.ts` under `ci-worker`, not from a project in the root
 config — every root project's include glob is anchored to `app/**`, `core/**` and
 `dev/**`, and extending one would also enrol worker files in the coverage ratchet.
@@ -1770,9 +1907,10 @@ case.
 so that a test that does not opt in sees the degraded path — the same shape as the
 catalogue handlers, which answer empty until a test says otherwise.
 
-**Load and CPU.** A test that drives each handler with a worst-case body and
-asserts CPU stays inside 10 ms. The vault's merge over a full push batch is the
-one at risk, and it is measured rather than assumed.
+**Load.** A test that drives each handler with a worst-case body and asserts it stays
+inside a budget the handler declares. The 10 ms ceiling that made this mandatory is
+gone, and the test earns its place anyway: the vault's merge over a full push batch is
+the one path where a quadratic mistake would stay hidden until a real device enrolled.
 
 ## CI and deployment
 
@@ -1805,7 +1943,8 @@ rather than in a per-repo workaround here. Until then: run `ci-reuse` before
 `include: ["**/*"]` and would typecheck `worker/**` against a DOM library it does
 not use. `worker` takes the place of the stale `studio` entry in `exclude`, and the
 worker gets its own
-`tsconfig.json` with `@cloudflare/workers-types`.
+`tsconfig.json` — carrying `@cloudflare/workers-types` today, and `@types/node` once
+it runs in a container.
 
 **Must be added or the gate silently does not cover the worker.**
 
@@ -1849,53 +1988,56 @@ The new command follows the established form:
 cd worker
 npm ci
 npm run typecheck
-exec npm test \"$@\""}
+exec npm test -- \"$@\""
+             :description "Typecheck the optional backend and run it in workerd"}
 ```
 
-`set -e` is not decoration. Without it the wrapper reports only the exit code of
-the final command, so a failing worker typecheck passes CI silently — the same
-trap the repository's own guidance names about checking exit codes rather than
-piping output. Anchoring on `git rev-parse --show-toplevel` keeps the wrapper
-correct when invoked from a subdirectory.
+`set -e` is not decoration. Without it the wrapper reports only the exit code of the
+final command, so a failing worker typecheck passes CI silently — the same trap the
+repository's own guidance names about checking exit codes rather than piping output.
+`breto run` starts the command at the repository root, which is what makes the bare
+`cd worker` correct.
 
 **Deployment workflow.** `.github/workflows/api.yml`, triggered on push to `main`
-under `worker/**`, applying migrations then deploying, using the existing
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. The token currently
-carries Cloudflare Pages Edit at account scope and needs Workers Scripts Edit, D1
-Edit and R2 Edit added — a token change, not a new credential.
+under `worker/**` and `core/**`, building and pushing the image; the cluster reconciles
+onto the new tag. Under the container runtime it needs a registry credential rather
+than the `CLOUDFLARE_API_TOKEN` scope change the Workers version wanted, and it no
+longer applies migrations itself — those run as a job in the cluster, ahead of the
+rollout, where the database is reachable.
 
 ## Provisioning
 
-Everything below is an account action rather than a repository one, which is why it is
-a checklist rather than a script. Nothing in the tree performs any of it, and the
-Worker in `worker/` deploys without any of it — `/v1/health` has no bindings, on
-purpose, so the pipeline can be built and reviewed before the storage exists.
+**Rewritten 2026-11-16 for the container runtime.** Everything below is an
+infrastructure action rather than a repository one, which is why it is a checklist
+rather than a script. Nothing in the tree performs any of it, and the service in
+`worker/` runs without any of it — `/v1/health` reads no storage, on purpose, so the
+pipeline can be built and reviewed before anything exists to lose.
 
-**The one-way door first.** D1, R2 and Durable Objects each accept an `eu`
-jurisdiction **only at creation**, and it cannot be added afterwards: a database
-created without it is fixed only by creating a second, copying the data, and swapping
-a binding on a live API. Preview counts, because preview receives real payloads during
-testing.
+**The cluster.** Rented hardware in Germany, a small Kubernetes install on it, Flux
+reconciling from a repository, an ingress with certificates, and `api.klimpi.app`
+pointed at it — proxied through Cloudflare so the WAF sits in front, or reached through
+a Tunnel where the ingress should not be public. Residency is decided here, by where
+the machines are.
 
-```sh
-wrangler d1 create klimpi --location eu           # and klimpi-preview
-wrangler r2 bucket create klimpi-vault --jurisdiction eu
-```
+**The database.** The CloudNativePG operator, then one `Cluster` for production and one
+for preview in a namespace of its own, with the **barman-cloud plugin** configured from
+the first manifest rather than the deprecated in-tree object-store fields. Preview and
+production never share a database: preview branches are disposable and already get
+their own origin precisely so that one cannot corrupt real data, and the same reasoning
+reaches the backend.
 
-Verify with `wrangler d1 info` before writing a row into either.
-
-**The token.** `CLOUDFLARE_API_TOKEN` exists as a repository secret and carries
-Cloudflare Pages:Edit at account scope, which is what deploys the site. Deploying a
-Worker additionally needs Workers Scripts:Edit; D1:Edit and R2:Edit follow when the
-phase that binds them starts. This is a scope change to an existing credential rather
-than a new one.
+**The backup target, and the restore.** An S3-compatible bucket for base backups and
+WAL, its jurisdiction chosen as deliberately as the cluster's. Then the step that is
+easy to skip and is the only evidence any of it works: bootstrap a throwaway `Cluster`
+from `recovery` against that bucket and confirm it comes up. Provisioning is not
+finished until that has been done once.
 
 **The order.** The privacy policy's API section is published before the client makes
 its first request — see [Privacy and law](#privacy-and-law) for why that deadline is
-the client's first call rather than the Worker's first deploy, and what the section
-has to name.
+the client's first call rather than the first deploy, and what the section has to name.
+It names the hosting and storage providers now rather than Cloudflare, Inc.
 
-**The deploy workflow is manual until all three are true.**
+**The deploy workflow is manual until the cluster exists.**
 `.github/workflows/api.yml` runs on `workflow_dispatch` and carries its
 push-on-`main` trigger commented out directly above, ready to be uncommented. A
 push-triggered job that cannot authenticate turns `main` red on every unrelated commit,
@@ -1936,18 +2078,20 @@ root**: enrolling the worker would make the root gate depend on the worker's
 `tsconfig.json` carries `noUnusedLocals`/`noUnusedParameters` and biome lints it, which
 covers what knip would have found in a tree this size.
 
-Two things in this phase are irreversible or externally binding, so they are
-called out rather than left to the checklist. **Every D1 database and R2 bucket —
-production *and* preview — is created with `--jurisdiction=eu`**, because the
-jurisdiction cannot be added afterwards and fixing it later means migrating data
-and swapping a binding on a live API. **The privacy policy's API section is
-published before the client calls the API**, because the health poll alone sends
-visitor IPs to a new processor. Deploying a Worker that nothing calls does not, so
-the scaffolding need not wait on the text — only the client does.
+One thing in this phase is externally binding, so it is called out rather than left to
+the checklist. **The privacy policy's API section is published before the client calls
+the API**, because the health poll alone sends every visitor's IP to a processor.
+Deploying a service nothing calls does not, so the scaffolding need not wait on the
+text — only the client does.
 
-Exit criteria: a deployed health endpoint; a deliberately broken worker test turns
-the build red; `wrangler d1 info` confirms the `eu` jurisdiction on every
-database; and the privacy policy names Cloudflare.
+The jurisdiction one-way door that stood beside it went with the runtime on 2026-11-16:
+residency is now decided by where the hardware is rented, which
+[Provisioning](#provisioning) covers, and a restore drill takes its place as the step
+that must happen before a real row is stored.
+
+Exit criteria: a deployed health endpoint; a deliberately broken worker test turns the
+build red; a restore drill from the backup target comes up clean; and the privacy
+policy names the hosting processor.
 
 **Phase 1 — result collection.** The `ResultSink` port, adapter, fake and MSW
 handler; the class-creation and results-reading screens; the submit offer on
@@ -1976,8 +2120,9 @@ additionally waits on the controller/processor determination and the DPIA** in
 an artist's identity: a maintainer accepting somebody's first piece and linking it to a
 person page is the moment their edit token exists. Then
 [artist pages](#capability-artist-pages) — `GET`/`PATCH` on one row, a whitelist, and the
-Actions job that writes the profile back into the tree. Requires R2, and therefore a
-payment method on file and a billing alert.
+Actions job that writes the profile back into the tree. Requires object storage, which
+the cluster already has for its backups; the payment-method question R2 raised does not
+arise.
 
 The client-only half — a profile in the repository, folded into the people index — has no
 backend dependency and can ship before any of it. Doing so first is worth it on its own:
@@ -1991,9 +2136,8 @@ a profile without a maintainer needs the backend, and that rides the submission
 queue rather than an endpoint of its own.
 
 Exit criteria: a submission travels from `/music/import` through review to a
-pull request without the submitter holding a GitHub account; fingerprinting runs
-in Actions rather than in a Worker; orphaned uploads are collected within 24
-hours; an artist edits their own blurb and links through a capability link, cannot touch
+pull request without the submitter holding a GitHub account; fingerprinting runs where
+the upload arrives; orphaned uploads are collected within 24 hours; an artist edits their own blurb and links through a capability link, cannot touch
 another artist's page or any field outside the whitelist, and sees the change live on the
 next deploy without a maintainer typing anything; and an edit introducing a new outbound
 link or a new image queues for review rather than publishing.
@@ -2073,26 +2217,40 @@ never rewritten.
 | 2026-08-26 | `worker/src` joins `MUST_SEE` in `dev/check-architecture.mjs`, not only `TREES` | `TREES` alone would let `worker-points-down` be evaluated over nothing and still pass, which is the exact failure that script exists to catch. The same change stops `sourceCount` walking `node_modules`, which a sub-project has and `app/` never did |
 | 2026-08-26 | The deploy workflow ships manual, with its push trigger commented out beside it | The token has no Workers scope yet, and a push-triggered job that cannot authenticate turns `main` red on every unrelated commit — which is how a repository learns to ignore a red `main` |
 | 2026-08-13 | Artist profiles live in the repository and change through the submission queue, not through an editing endpoint | With no CMS to proxy, a live-edit path would mean building a store, a token, a field whitelist and a link allowlist to guard it. A profile edit is a submission like a piece is, which the artist decision above already chose as the mechanism — so the read path is a file that ships with the build, and nothing an artist writes is public until a person has read it |
+| 2026-11-16 | **The API runs as containers on a Kubernetes cluster we operate, with PostgreSQL and S3-compatible object storage. Supersedes the Cloudflare platform row of 2026-08-09 for the API alone** | That row rejected a VPS because it meant a machine to patch, back up and pay for. A cluster now exists for work unrelated to Klimpi, so that cost is already paid and the premise no longer holds. What the move buys: the 10 ms CPU ceiling disappears, and with it the GitHub Actions detour for moderation and the ban on parsing MusicXML in a request path; D1's 50-queries-per-invocation cap disappears, and with it the vault's chunked first-sync protocol; and the data sits where we rent the hardware. Cloudflare keeps the website, the DNS, the WAF and the sample recordings |
+| 2026-11-16 | The move was **not** made for the request budget | The free Workers allowance is 100,000/day and this backend projects about 2,000. The allowance is nearly spent because the website's edge middleware shares the meter, which is a website problem with a website answer. Recorded because a later reader would otherwise conclude the API outgrew the free tier, and design around a constraint that was never binding |
+| 2026-11-16 | Open question 1 — a payment method on file for R2 — is **void rather than answered** | It existed because R2 bills rather than failing closed and was the only store that could hold the vault's blobs and submitted scores. Object storage beside the cluster holds them instead, so the liability it described does not arise. R2 still serves the sample recordings, where there is no write path and no personal data |
+| 2026-11-16 | `api.klimpi.app` stays a separate origin, and same-origin `/api/*` is **declined rather than reconsidered at phase 4** | Option B was always implemented by a Pages Function, which is the one thing the new runtime exists to avoid. The CORS preflight it was weighed against was a share of a daily allowance that no longer applies to the API |
+| 2026-11-16 | PostgreSQL through CloudNativePG, with the barman-cloud plugin from the first manifest | The in-tree `spec.backup.barmanObjectStore` fields were deprecated in CNPG 1.26 and are scheduled for removal, so configuring them today buys a migration for nothing |
+| 2026-11-16 | Backups are the one obligation the move adds, and a restore drill is part of provisioning rather than of operations | D1 and R2 carried durability; a database we run does not until we make it. A backup nobody has restored is a hypothesis, and a school's collected results are the thing a school is paying for |
+| 2026-11-16 | Residency is a design asset rather than a disclosure | A German Musikschule is Verantwortliche and needs an Art. 28 agreement; a transfer to a US provider needs Art. 44 safeguards. A November 2026 survey of the US practice apps in this market found none naming a DPA or an EU storage location, while the German products advertise a German data centre. Hosting here is a procurement advantage that costs nothing extra once the cluster exists |
 
 ## Open questions
 
 Each needs an answer before the phase that depends on it starts. None blocks
 phase 0.
 
-1. **Is a payment method on file acceptable for R2?** R2 bills rather than failing
-   closed, so this is a decision about accepting a small unbounded liability in
-   exchange for two capabilities. Blocks phases 2 and 4.
-2. **Who is controller for classroom use, and who writes the DPIA?** Consent is
+1. **Where do the backups live, and who confirms the drill ran?** The cluster's
+   jurisdiction is settled by where the hardware is rented; the backup target is a
+   second, independent choice and a copy of everything. An object store beside the
+   cluster keeps the processor chain short and its API calls unmetered; Cloudflare R2
+   offers zero egress and puts a US processor back into the chain. Blocks nothing
+   before phase 1 stores a real row, and must be answered before it does.
+2. **How many Postgres instances, and when does one stop being enough?** One is enough
+   while a backend outage costs a capability and nothing else. It stops being enough
+   the day a school's term reports depend on it. Blocks nothing; decide before the
+   first paying school.
+3. **Who is controller for classroom use, and who writes the DPIA?** Consent is
    not a valid basis for teacher-instructed submissions by pupils under 16, so
    result collection in a German school needs the school as controller, Klimpi as
    processor, and a processor agreement — or a different design. This needs
    someone qualified. Blocks phase 1 reaching real classrooms, not its
    development.
-3. **Does the vault sync automatically or on request?** Automatic is better
+4. **Does the vault sync automatically or on request?** Automatic is better
    product and multiplies request volume, conflict surface and enrolment-wave
    risk. A manual "sync now" is the safer first version. Blocks phase 4's
    interface.
-4. **Should a teacher be warned before a class expires?** Activity-based retention
+5. **Should a teacher be warned before a class expires?** Activity-based retention
    with a 400-day ceiling removes the urgent version of this problem, and stating
    both numbers at class creation may be sufficient. A warning needs a contact
    address, which is the first crack in the no-PII posture. Blocks nothing; decide
