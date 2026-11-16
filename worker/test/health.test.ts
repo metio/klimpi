@@ -1,11 +1,11 @@
-// SPDX-FileCopyrightText: The Plinky Authors
+// SPDX-FileCopyrightText: The Klimpi Authors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it } from "vitest";
 import worker, { corsConfig, type Env } from "../src/index";
 import { flagsFrom } from "../src/routes/health";
 
-const ORIGIN = "https://plinky.fun";
+const ORIGIN = "https://klimpi.app";
 
 // The environment a test asks for, built here rather than read from the deployed
 // settings. A handler that can only be tested against production's configuration is
@@ -17,7 +17,7 @@ const withEnv = (overrides: Partial<Env> = {}): Env => ({
 });
 
 const get = (path: string, headers: Record<string, string> = {}) =>
-    worker.fetch(new Request(`https://api.plinky.fun${path}`, { headers }), withEnv());
+    worker.fetch(new Request(`https://api.klimpi.app${path}`, { headers }), withEnv());
 
 describe("the health endpoint", () => {
     it("answers with a versioned envelope", async () => {
@@ -48,7 +48,7 @@ describe("the health endpoint", () => {
 
     it("reports every capability off in a build with none configured", async () => {
         const response = await worker.fetch(
-            new Request("https://api.plinky.fun/v1/health"),
+            new Request("https://api.klimpi.app/v1/health"),
             withEnv({
                 FEATURE_RESULTS: undefined,
                 FEATURE_SUBMISSIONS: undefined,
@@ -71,7 +71,7 @@ describe("the health endpoint", () => {
 
     it("refuses a write to a read", async () => {
         const response = await worker.fetch(
-            new Request("https://api.plinky.fun/v1/health", { method: "POST" }),
+            new Request("https://api.klimpi.app/v1/health", { method: "POST" }),
             withEnv(),
         );
 
@@ -96,7 +96,7 @@ describe("anything that is not a route", () => {
 describe("who may call the API", () => {
     it("answers a preflight for an allowed origin", async () => {
         const response = await worker.fetch(
-            new Request("https://api.plinky.fun/v1/health", {
+            new Request("https://api.klimpi.app/v1/health", {
                 method: "OPTIONS",
                 headers: { origin: ORIGIN },
             }),
@@ -112,9 +112,9 @@ describe("who may call the API", () => {
 
     it("refuses a preflight from anywhere else", async () => {
         const response = await worker.fetch(
-            new Request("https://api.plinky.fun/v1/health", {
+            new Request("https://api.klimpi.app/v1/health", {
                 method: "OPTIONS",
-                headers: { origin: "https://plinky.fun.evil.test" },
+                headers: { origin: "https://klimpi.app.evil.test" },
             }),
             withEnv(),
         );

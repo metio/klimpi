@@ -272,7 +272,7 @@ Environments:
 | Environment | Worker | Data | Client reaches it via |
 | --- | --- | --- | --- |
 | Production | `klimpi-api` | D1 `klimpi`, R2 `klimpi-vault` | `VITE_API_BASE=https://api.klimpi.app` |
-| Preview | `klimpi-api-preview` | D1 `plinky-preview`, R2 `klimpi-vault-preview` | Set per preview deploy |
+| Preview | `klimpi-api-preview` | D1 `klimpi-preview`, R2 `klimpi-vault-preview` | Set per preview deploy |
 | Local | `wrangler dev` | Local D1 and R2 emulation | `.env.local` |
 
 Preview and production must never share a database. Preview branches are
@@ -1796,13 +1796,15 @@ CI is unaffected, because the lint gate and `ci-worker` run as separate jobs wit
 separate checkouts and only the second installs the worker's dependencies. So the
 gate is honest where it counts and noisy where it does not — which is the wrong way
 round for the one gate whose whole purpose is to be run locally before pushing. The
-fix belongs in `metio/nix-devshell`, where `ci-reuse` is defined once for every repo,
+fix belongs in `metio/toolchains`, where the `@lint` group defines `ci-reuse` once
+for every repo,
 rather than in a per-repo workaround here. Until then: run `ci-reuse` before
 `ci-worker`, or read past the `worker/node_modules` lines.
 
 **Must be excluded or it breaks the build.** The root `tsconfig.json` has
 `include: ["**/*"]` and would typecheck `worker/**` against a DOM library it does
-not use. `worker` joins `exclude` beside `studio`, and the worker gets its own
+not use. `worker` takes the place of the stale `studio` entry in `exclude`, and the
+worker gets its own
 `tsconfig.json` with `@cloudflare/workers-types`.
 
 **Must be added or the gate silently does not cover the worker.**
@@ -1876,8 +1878,8 @@ a binding on a live API. Preview counts, because preview receives real payloads 
 testing.
 
 ```sh
-wrangler d1 create plinky --location eu           # and plinky-preview
-wrangler r2 bucket create plinky-vault --jurisdiction eu
+wrangler d1 create klimpi --location eu           # and klimpi-preview
+wrangler r2 bucket create klimpi-vault --jurisdiction eu
 ```
 
 Verify with `wrangler d1 info` before writing a row into either.
@@ -1914,7 +1916,7 @@ and nothing has been deployed.
 
 What is in the tree: the router, the response envelope, the CORS allowlist and the
 health endpoint, with fourteen tests running in workerd through
-`@cloudflare/vitest-pool-workers`; `ci-worker` in `flake.nix` and a `worker` job in
+`@cloudflare/vitest-pool-workers`; `ci-worker` in `.breto.edn` and a `worker` job in
 `verify.yml` wired into the `verify` aggregate; the `worker-points-down` rule, with
 `worker/src` added to both `TREES` and `MUST_SEE` in `dev/check-architecture.mjs` so
 the rule is covered by the same floor that catches a cruise seeing nothing; `worker` in

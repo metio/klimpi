@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: The Plinky Authors
+// SPDX-FileCopyrightText: The Klimpi Authors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Which origins may call the API, and what a preflight costs.
@@ -26,9 +26,9 @@ export function allowedOrigin(request: Request, config: CorsConfig): string | nu
     if (origin === null) {
         return null;
     }
-    // Compared whole, never by prefix or suffix. `plinky.fun.example.com` ends with
-    // nothing this list holds, but `startsWith("https://plinky.fun")` would admit
-    // `https://plinky.fun.evil.test`.
+    // Compared whole, never by prefix or suffix. `klimpi.app.example.com` ends with
+    // nothing this list holds, but `startsWith("https://klimpi.app")` would admit
+    // `https://klimpi.app.evil.test`.
     return config.allowedOrigins.includes(origin) ? origin : null;
 }
 

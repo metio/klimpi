@@ -1,11 +1,11 @@
-// SPDX-FileCopyrightText: The Plinky Authors
+// SPDX-FileCopyrightText: The Klimpi Authors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { allowedOrigin, type CorsConfig, preflight, withCors } from "./lib/cors";
 import { fail } from "./lib/envelope";
 import { health } from "./routes/health";
 
-// The whole API surface. Plinky works with no server at all, so everything here is
+// The whole API surface. Klimpi works with no server at all, so everything here is
 // additive by construction: a capability that is off, unreachable or never deployed
 // leaves the app exactly as it is.
 //

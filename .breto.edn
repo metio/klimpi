@@ -60,4 +60,12 @@ done"
               :limits {:cpus 6 :memory "8G" :io-weight 50}}
  "ci-anchors" {:run "exec npm run songs:anchors \"$@\""}
  "ci-promo" {:run "exec npm run promo:check \"$@\""}
- "ci-parity" {:run "exec npm run ci:parity \"$@\""}}}
+ "ci-parity" {:run "exec npm run ci:parity \"$@\""}
+ "ci-worker" {:run "set -e
+# worker/ is its own npm project with its own lockfile and its own toolchain, so it
+# installs here rather than riding the root install.
+cd worker
+npm ci
+npm run typecheck
+exec npm test -- \"$@\""
+               :description "Typecheck the optional backend and run it in workerd"}}}

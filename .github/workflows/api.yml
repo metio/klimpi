@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: The Plinky Authors
+# SPDX-FileCopyrightText: The Klimpi Authors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Deploys the optional backend. The design and the rollout live in BACKEND.md.
@@ -53,10 +53,12 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-            - uses: metio/nix-devshell@1976169d4c51b321be318ade369ccf689849f9f0 # 2026.7.6091757
+            - uses: metio/ci/breto@2c9b3ef3bf280e85541853d686e261dd7b92eac9 # 2026.11.2090039
+              with:
+                  registries: github:metio/toolchains
             # The same gate the pull request ran. A deploy that skips it is a deploy that
             # can ship what CI would have refused.
-            - run: nix develop --command ci-worker
+            - run: ci-worker
             - name: Deploy
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

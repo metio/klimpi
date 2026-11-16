@@ -1,9 +1,9 @@
 {
-    "name": "plinky-worker",
+    "name": "klimpi-worker",
     "version": "0.0.0",
     "private": true,
     "type": "module",
-    "description": "Plinky's optional backend. See BACKEND.md at the repository root.",
+    "description": "Klimpi's optional backend. See BACKEND.md at the repository root.",
     "license": "AGPL-3.0-or-later",
     "scripts": {
         "typecheck": "tsc",

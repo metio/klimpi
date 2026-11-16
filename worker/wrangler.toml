@@ -1,7 +1,7 @@
-# SPDX-FileCopyrightText: The Plinky Authors
+# SPDX-FileCopyrightText: The Klimpi Authors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# Plinky's optional backend. The design, the rollout and the reasoning behind every
+# Klimpi's optional backend. The design, the rollout and the reasoning behind every
 # choice here live in BACKEND.md at the repository root.
 #
 # Phase 0 is the pipeline and nothing that runs through it: one /v1/health endpoint,
@@ -10,7 +10,7 @@
 # an EU jurisdiction that cannot be added afterwards. See "Provisioning" in
 # BACKEND.md before adding the first binding.
 
-name = "plinky-api"
+name = "klimpi-api"
 main = "src/index.ts"
 # Pinned, never floating: the runtime's behaviour is part of what the tests pin, and
 # a date that moves on its own moves them with it.
@@ -29,7 +29,10 @@ workers_dev = false
 enabled = true
 
 [vars]
-ALLOWED_ORIGINS = "https://plinky.fun"
+# Both hosts serve the same build. plinky.fun is the address Klimpi answered to
+# before the rename and still does; core/oldDomain.ts carries the notice and the
+# day it stops. Drop the second origin when that day passes.
+ALLOWED_ORIGINS = "https://klimpi.app,https://plinky.fun"
 # Every capability off. Phase 0 has none to turn on, and a flag that answers true
 # advertises an endpoint that returns 404.
 FEATURE_RESULTS = "off"
@@ -41,11 +44,11 @@ FEATURE_VAULT = "off"
 # Preview branches are disposable and already get their own origin precisely so that
 # one cannot corrupt real data; the same reasoning reaches the backend.
 [env.preview]
-name = "plinky-api-preview"
+name = "klimpi-api-preview"
 workers_dev = true
 
 [env.preview.vars]
-ALLOWED_ORIGINS = "https://plinky.fun,http://localhost:5173"
+ALLOWED_ORIGINS = "https://klimpi.app,https://plinky.fun,http://localhost:5173"
 FEATURE_RESULTS = "off"
 FEATURE_SUBMISSIONS = "off"
 FEATURE_DAILY = "off"
