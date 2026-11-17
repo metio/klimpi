@@ -75,6 +75,51 @@ const TRAILING_MEMBER = /[-–,.:#]\s*(\d{1,3})\s*\.?\s*$/;
 // A number in FRONT of a word is a count ("25 Études faciles"), which is why the word
 // has to come first. Read only beside a catalogue mark, for the same reason.
 const MEMBER_AFTER_WORD = /\b[a-z]{3,}\.?\s+(\d{1,3})\b/i;
+// A member written where a set lists its parts: "Dolly, Op. 56: 4. Kitty-valse", "Holberg
+// Suite, Op. 40: III. Gavotte", "Suite bergamasque: I. Prélude". The numeral sits behind a
+// separator and in front of a period and the part's own name, and that shape is what tells
+// it from a year, a key or a count — so this one needs no catalogue mark beside it, which
+// is the only reason Debussy's suite resolves at all.
+const SEP_MEMBER = /[:,]\s*(\d{1,2}|[ivx]{1,4})\s*\.\s*\p{L}/u;
+
+// Roman numerals as a table rather than as arithmetic. The range a set's parts occupy is
+// fixed and small — the longest book that matters is the Well-Tempered Clavier's
+// twenty-four — and a table cannot read "iiii" as four.
+const ROMAN: Record<string, number> = {
+    i: 1,
+    ii: 2,
+    iii: 3,
+    iv: 4,
+    v: 5,
+    vi: 6,
+    vii: 7,
+    viii: 8,
+    ix: 9,
+    x: 10,
+    xi: 11,
+    xii: 12,
+    xiii: 13,
+    xiv: 14,
+    xv: 15,
+    xvi: 16,
+    xvii: 17,
+    xviii: 18,
+    xix: 19,
+    xx: 20,
+    xxi: 21,
+    xxii: 22,
+    xxiii: 23,
+    xxiv: 24,
+};
+
+// The numeral a part is listed under, arabic or roman, or null for text that is neither.
+function memberNumber(text: string): number | null {
+    if (/^\d+$/.test(text)) {
+        const value = Number(text);
+        return value > 0 ? value : null;
+    }
+    return ROMAN[text] ?? null;
+}
 
 function fold(text: string): string {
     return (
@@ -128,6 +173,10 @@ export function workRef(composer: string, title: string): WorkRef | null {
 
     const marked = MEMBER.exec(rest);
     let number = marked ? Number(marked[1] ?? marked[2] ?? marked[3]) : null;
+    // What a set calls its own part, read before the two bare-number rules below, which
+    // guess from position alone and so are only safe beside a catalogue mark.
+    const listed = number === null ? SEP_MEMBER.exec(rest) : null;
+    number = listed ? memberNumber(listed[1]!) : number;
     if (number === null && mark !== null) {
         const trailing = TRAILING_MEMBER.exec(rest);
         const behind = trailing ? null : MEMBER_AFTER_WORD.exec(rest);
@@ -138,7 +187,14 @@ export function workRef(composer: string, title: string): WorkRef | null {
     }
 
     const slug = personSlug(composer);
-    const set = mark === null ? slugify(rest.replace(MEMBER, " ")) : slugify(mark);
+    // Where a part was listed under a separator, the set is the text in front of it: the
+    // text behind names the part, not the book, so "Suite bergamasque: I. Prélude" and
+    // "… IV. Passepied" have to reduce to one set and not to two.
+    const named =
+        listed !== null && number !== null
+            ? rest.slice(0, listed.index)
+            : rest.replace(MEMBER, " ");
+    const set = mark === null ? slugify(named) : slugify(mark);
     if (slug === "" || set === "") {
         return null;
     }

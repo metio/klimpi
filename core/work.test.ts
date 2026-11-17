@@ -116,6 +116,41 @@ describe("workRef", () => {
         );
     });
 
+    it("reads the numeral a set lists its own parts under", () => {
+        // Arabic and roman both, and in front of the part's name rather than behind it.
+        expect(key("Gabriel Fauré", "Dolly, Op. 56: 4. Kitty-valse")).toBe("gabriel-faure/op-56/4");
+        expect(key("Edvard Grieg", "Holberg Suite, Op. 40: III. Gavotte")).toBe(
+            "edvard-grieg/op-40/3",
+        );
+    });
+
+    it("needs no catalogue mark for a part listed under a separator", () => {
+        // The shape carries the number on its own: a numeral behind the separator and in
+        // front of a period and the part's name is not a year, a key or a count. Debussy's
+        // suite has no opus on any of its four rows and resolves from this alone.
+        expect(key("Claude Debussy", "Suite bergamasque: I. Prélude")).toBe(
+            "claude-debussy/suite-bergamasque/1",
+        );
+        expect(key("Claude Debussy", "Suite bergamasque: IV. Passepied")).toBe(
+            "claude-debussy/suite-bergamasque/4",
+        );
+    });
+
+    it("takes the set from in front of the separator, not from the part behind it", () => {
+        // Two parts of one suite, which have to reduce to one set: naming the set after the
+        // whole title would file every movement as a book of its own.
+        expect(workSetOf(key("Claude Debussy", "Suite bergamasque: II. Menuet") ?? "")).toBe(
+            workSetOf(key("Claude Debussy", "Suite bergamasque: III. Clair de lune") ?? ""),
+        );
+        expect(workSetOf(key("Claude Debussy", "Suite bergamasque: II. Menuet") ?? "")).toBe(
+            "claude-debussy/suite-bergamasque",
+        );
+    });
+
+    it("does not read a roman numeral that spells nothing as a member", () => {
+        expect(workRef("Claude Debussy", "Suite bergamasque: iiii. Menuet")).toBeNull();
+    });
+
     it("reads a bare number only beside a catalogue mark", () => {
         // With no mark there is nothing to say the number is an ordinal rather than a key,
         // a year or a count, so the title names no work and a ruling decides.
