@@ -44,7 +44,7 @@ function routes(children: React.ReactNode) {
                 <Route path="glossary" element={<Glossary />} />
                 <Route path="glossary/:term" element={<Glossary />} />
             </Route>
-            <Route path="*" element={<>{children}</>} />
+            <Route path="*" element={children} />
         </Routes>
     );
 }

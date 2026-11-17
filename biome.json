@@ -1,5 +1,5 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
     "vcs": {
         "enabled": true,
         "clientKind": "git",
@@ -59,6 +59,16 @@
         "enabled": false
     },
     "overrides": [
+        {
+            "includes": ["**/*.test.ts", "**/*.test.tsx"],
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noComponentHookFactories": "off"
+                    }
+                }
+            }
+        },
         {
             "includes": ["core/scoreDifficulty.ts"],
             "linter": {

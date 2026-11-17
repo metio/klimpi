@@ -98,7 +98,7 @@ export function nameHeldNotes(pitches: readonly number[]): HeldSound | null {
             const inversion = stack.indexOf(
                 bass >= root ? bass - root : bass - root + SEMITONES_PER_OCTAVE,
             );
-            matches.push({ root, quality, inversion: inversion < 0 ? 0 : inversion });
+            matches.push({ root, quality, inversion: Math.max(inversion, 0) });
         }
     }
     if (matches.length === 0) {

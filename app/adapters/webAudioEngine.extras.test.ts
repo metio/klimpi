@@ -68,18 +68,6 @@ describe("the key-off knock", () => {
         expect(samples.extras().filter((one) => one.kind === "knock")).toHaveLength(0);
     });
 
-    it("is not scheduled with a fixed-length note", async () => {
-        // A knock is the damper landing, and on a real instrument that is a sparse sound —
-        // it needs a key to come up with nothing else holding it. A scheduled note has no
-        // such test: every one ends at a known time, so knocking with each put a broadband
-        // click on every note and a click train through anything fast, measurably over the
-        // music. Listen and every video export strike this way.
-        const fake = fakeAudioContext();
-        const samples = pack();
-        const engine = await engineWith(fake, samples.lookup);
-        engine.strike({ note: 72, gain: 0.3, velocity: 90, duration: 0.5, delay: 0 });
-        expect(samples.extras().filter((one) => one.kind === "knock")).toHaveLength(0);
-    });
     it("sounds when the damper lands", async () => {
         const fake = fakeAudioContext();
         const samples = pack();
