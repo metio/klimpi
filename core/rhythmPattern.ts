@@ -198,14 +198,33 @@ export const RHYTHM_LEVELS: RhythmLevel[] = [
 const pick = <T>(items: readonly T[], rng: () => number): T =>
     items[Math.min(items.length - 1, Math.floor(rng() * items.length))] as T;
 
+// Whether a figure asks for a tap at all. The rest figures are whole figures like any
+// other, so a bar — or a pattern — can be built entirely out of them.
+const sounds = (figure: Figure) => figure.cells.some((cell) => !cell.rest);
+
 // Fills one bar with whole figures. A figure too long for the room left is not offered,
 // so the bar cannot overflow; when nothing fits, the remainder is a rest, which only
 // happens if a level offers no one-beat figure at all.
-function fillBar(level: RhythmLevel, rng: () => number, group: { next: number }): Cell[] {
+//
+// `owed` asks this bar for a tap. A pattern of nothing but rests is a round a player
+// cannot take part in — it expects no tap, so every tap is a spare one — and the last
+// bar therefore opens with a figure that sounds when the bars before it placed none.
+// A level with no sounding figure short enough has nothing to offer the demand, so it
+// yields rather than leave the bar unfilled; the ladder is held to carrying one by its
+// own test.
+function fillBar(
+    level: RhythmLevel,
+    rng: () => number,
+    group: { next: number },
+    owed: boolean,
+): Cell[] {
     const cells: Cell[] = [];
     let left = level.beatsPerBar;
     while (left > 0) {
-        const options = level.figures.filter((figure) => figure.beats <= left);
+        const fits = level.figures.filter((figure) => figure.beats <= left);
+        const sounding = fits.filter(sounds);
+        const silent = owed && !cells.some((cell) => !cell.rest);
+        const options = silent && sounding.length > 0 ? sounding : fits;
         const figure = options.length > 0 ? pick(options, rng) : null;
         if (!figure) {
             cells.push({ value: "quarter", beats: left, rest: true });
@@ -226,7 +245,8 @@ export function generateRhythm(levelIndex: number, rng: () => number): RhythmPat
     const group = { next: 0 };
     const cells: Cell[] = [];
     for (let bar = 0; bar < level.bars; bar++) {
-        cells.push(...fillBar(level, rng, group));
+        const last = bar === level.bars - 1;
+        cells.push(...fillBar(level, rng, group, last && !cells.some((cell) => !cell.rest)));
     }
     return {
         level: index,

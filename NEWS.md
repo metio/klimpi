@@ -8,6 +8,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 Klimpi has no version numbers and no release days — every change goes live the moment
 it's ready. This is what's changed, newest first, in plain terms.
 
+## 17 November 2026
+
+**A rhythm round always has something to clap.** At the levels where rests sit beside
+the beats, a round could come up as nothing but rests — a line to read with no tap in
+it, where any tap you gave counted as a spare one. Every round now asks for at least
+one.
+
 ## 2 November 2026
 
 **If you practised at the old address, your progress can come with you.** Klimpi used

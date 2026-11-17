@@ -10,6 +10,16 @@ import type { Release } from "./changelog";
 
 export const LATEST_RELEASES: Release[] = [
     {
+        date: "2026-11-17",
+        label: null,
+        entries: [
+            {
+                body: "**A rhythm round always has something to clap.** At the levels where rests sit beside\nthe beats, a round could come up as nothing but rests — a line to read with no tap in\nit, where any tap you gave counted as a spare one. Every round now asks for at least\none.",
+                twip: true,
+            },
+        ],
+    },
+    {
         date: "2026-11-02",
         label: null,
         entries: [
@@ -19,16 +29,6 @@ export const LATEST_RELEASES: Release[] = [
             },
             {
                 body: "**The two pieces that come with Klimpi say where they are from again.** Ode to Joy and\nTwinkle Twinkle lost their source line when the name changed. Every piece here names\nits composer, its source and its licence, and our own two transcriptions are no\nexception.",
-                twip: true,
-            },
-        ],
-    },
-    {
-        date: "2026-11-01",
-        label: "night",
-        entries: [
-            {
-                body: "**The bar at the top of your phone takes the colour of the page.** In dark or black\nit was staying white, a bright strip above a dark screen. It now follows whichever\ntheme and colours you picked.",
                 twip: true,
             },
         ],

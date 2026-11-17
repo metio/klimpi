@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { describe, expect, it } from "vitest";
+import { seededRandom } from "./random";
 import {
     cellBeats,
     expectedOnsets,
@@ -58,6 +59,33 @@ describe("the rhythm ladder", () => {
             for (const rng of seeds(8)) {
                 expect(expectedOnsets(generateRhythm(level, rng), 90).length).toBeGreaterThan(0);
             }
+        }
+    });
+
+    it("asks for one however the draws fall, not merely in most rounds", () => {
+        // The levels carrying rest figures can fill every beat with one, and the odds are
+        // not long: level 2 offers three figures of which one is a half rest, so a pattern
+        // of silence is one draw in eighty-one. A handful of seeds walks past that; a
+        // player meeting it is handed a line to read with no tap in it, scored out of
+        // nothing, where every tap they do give counts as a spare one.
+        for (let level = 0; level < RHYTHM_LEVELS.length; level++) {
+            for (let seed = 0; seed < 4000; seed++) {
+                const pattern = generateRhythm(level, seededRandom(seed));
+                const taps = pattern.cells.filter((cell) => !cell.rest);
+                expect(taps.length, `level ${level}, seed ${seed}`).toBeGreaterThan(0);
+            }
+        }
+    });
+
+    it("offers a figure that sounds at every level, short enough for a bar", () => {
+        // What the demand for a tap spends: with no sounding figure to reach for, the last
+        // bar would have to fill itself with rests and a round could be silent again.
+        for (const level of RHYTHM_LEVELS) {
+            const sounding = level.figures.filter(
+                (figure) =>
+                    figure.beats <= level.beatsPerBar && figure.cells.some((cell) => !cell.rest),
+            );
+            expect(sounding.length).toBeGreaterThan(0);
         }
     });
 
