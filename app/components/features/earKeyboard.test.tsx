@@ -28,8 +28,11 @@ describe("EarKeyboard geometry", () => {
         draw();
         const csharp = screen.getByRole("button", { name: "C sharp" });
         const lane = keyLane(61, 60, 71)!;
-        expect(csharp.style.left).toBe(`${lane.leftPct}%`);
-        expect(csharp.style.width).toBe(`${lane.widthPct}%`);
+        // A percentage serializes to six significant digits, so the rendered string is a
+        // rounding of the lane's own number. Five decimals is far finer than a second set
+        // of proportions could agree to by accident.
+        expect(Number.parseFloat(csharp.style.left)).toBeCloseTo(lane.leftPct, 5);
+        expect(Number.parseFloat(csharp.style.width)).toBeCloseTo(lane.widthPct, 5);
     });
 
     it("offers seven white keys and five black ones, which is an octave", () => {

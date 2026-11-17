@@ -157,7 +157,7 @@ if (staticLocale) {
 // translation carries still has a count that reaches it.
 const registryPath = "./app/paraglide/registry.js";
 const registry = readFileSync(registryPath, "utf8");
-const pluralRules = "new Intl.PluralRules(locale, options)";
+const pluralRules = "getIntlFormatter(Intl.PluralRules, locale, options, cacheable)";
 if (!registry.includes(pluralRules)) {
     throw new Error(
         `Could not find ${pluralRules} in registry.js — the Paraglide output shape changed; ` +
@@ -168,7 +168,7 @@ writeFileSync(
     registryPath,
     registry.replace(
         pluralRules,
-        'new Intl.PluralRules(locale === "pt" ? "pt-PT" : locale, options)',
+        'getIntlFormatter(Intl.PluralRules, locale === "pt" ? "pt-PT" : locale, options, cacheable)',
     ),
 );
 
