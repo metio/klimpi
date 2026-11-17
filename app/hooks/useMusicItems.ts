@@ -50,8 +50,15 @@ export function useMusicItems() {
             map[id] = value;
         }
         setMastery(map);
+        // Both manifests are fetched, so they can land after the hook is gone — on a
+        // route change, or when a test's document is torn down. A write then reaches for
+        // a window that no longer exists, so the arriving lists are dropped instead.
+        let live = true;
         Promise.all([services.exercises.manifest(), services.songs.manifest()]).then(
             ([exerciseList, manifest]) => {
+                if (!live) {
+                    return;
+                }
                 setExercises(
                     (exerciseList ?? []).map((exercise) => ({
                         id: exercise.id,
@@ -86,6 +93,9 @@ export function useMusicItems() {
                 setLoaded(true);
             },
         );
+        return () => {
+            live = false;
+        };
     }, [reloadLocal, services.mastery, services.songs.manifest, services.exercises.manifest]);
 
     // Gentlest first within each grade. Both manifests arrive in that order and
