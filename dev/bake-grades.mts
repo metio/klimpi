@@ -19,9 +19,9 @@
 // in grade 1 together.
 //
 // It also applies the hand-made metadata corrections (dev/curation.mts) and bakes the
-// composer index (dev/bake-people.mts) from the same manifests, so every artefact derived
-// from the shipped catalogue is regenerated and checked by one command and one CI gate
-// rather than drifting apart behind separate ones. The corrections come first: the
+// composer index (dev/bake-people.mts) and the work index (dev/bake-works.mts) from the
+// same manifests, so every artefact derived from the shipped catalogue is regenerated and
+// checked by one command and one CI gate rather than drifting apart behind separate ones. The corrections come first: the
 // composer index is built from the credits, so it has to be built from the corrected ones.
 //
 // `npm run songs:bake` writes those; `npm run songs:bake -- --check` writes nothing and
@@ -32,6 +32,7 @@
 import { bakeBuiltinAssignments } from "./bake-builtin-assignments.mts";
 import { bakePeopleIndex } from "./bake-people.mts";
 import { bakeShards } from "./bake-shards.mts";
+import { bakeWorks } from "./bake-works.mts";
 import { curate, loadCuration, unapplied } from "./curation.mts";
 import { tidied, tidyCredit, tidyTitle } from "./titles.mts";
 import { crowdedGrade, missingSentinel, SENTINELS, staleSong } from "./bakeChecks.mts";
@@ -198,6 +199,10 @@ async function main() {
             console.error("\nRun `npm run songs:bake` to update, then commit the result.");
             process.exit(1);
         }
+        if (!(await bakeWorks(true))) {
+            console.error("\nRun `npm run songs:bake` to update, then commit the result.");
+            process.exit(1);
+        }
         console.log("Catalogue grades are baked and consistent.");
         return;
     }
@@ -208,6 +213,9 @@ async function main() {
     // After the manifest is written, since both are read from the file on disk.
     await bakeShards(false);
     if (!(await bakeBuiltinAssignments(false))) {
+        process.exit(1);
+    }
+    if (!(await bakeWorks(false))) {
         process.exit(1);
     }
 

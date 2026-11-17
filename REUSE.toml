@@ -85,6 +85,7 @@ path = [
     "dev/catalog-reach-costs.json",
     "dev/grade-anchors.json",
     "dev/builtin-assignments.json",
+    "dev/catalog-works.json",
     "dev/retired-routes.json",
     "dev/models/traces/*/*.itf.json",
 ]
@@ -119,6 +120,14 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 # catalogue holds. Written by `npm run songs:bake` from dev/builtin-assignments.json.
 [[annotations]]
 path = ["public/songs/builtin-assignments.json"]
+precedence = "override"
+SPDX-FileCopyrightText = "The Klimpi Authors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Which work each catalogue row is, by song id. Written by `npm run songs:bake` from the
+# titles themselves and dev/catalog-works.json.
+[[annotations]]
+path = ["public/songs/works.json"]
 precedence = "override"
 SPDX-FileCopyrightText = "The Klimpi Authors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"

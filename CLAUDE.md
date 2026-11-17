@@ -473,6 +473,23 @@ offline.
   carries a `why`. A composer's *spelling* is a different question: `ALIASES` in
   `core/person.ts` maps a spelling to one person for display, across every piece bearing
   it, now and in future.
+- **Which work a row is goes in `dev/catalog-works.json`**, never into its title. A title
+  says what a transcriber typed; a work key says which opus it is, and a German syllabus,
+  a competition programme and a repertoire list all name a piece that way. `core/work.ts`
+  reads a key off any title carrying a catalogue mark or a member number — about one row
+  in nine — and the file covers the rest in three tiers: an **alias** renames a set the
+  derivation found under its name (Czerny's eight-bar exercises are op. 821), a **set**
+  names one the derivation cannot see at all, by a composer pattern and one title pattern
+  per number (Burgmüller's op. 100 is sixteen French character titles with no opus on any
+  of them), and a **ruling** keyed by song id is the last word over both. `npm run
+  songs:bake` resolves them into `public/songs/works.json` and fails when a set drops
+  below its `least` or an alias renames a set nothing derives, so a pattern that has
+  rotted is caught rather than quietly identifying nothing. A set is a string prefix of
+  its members — `…/op-100` and `…/op-100/7` — which is what lets one lookup answer both
+  "the book" and "number 7 of it", and why the index ships keyed by song id rather than
+  by work. It is its own file beside `builtin-assignments.json`, not a manifest column:
+  every browsing visitor downloads the manifest, and a key on every row would add about
+  125 KB for something a handful of pages read.
 - **Every file** carries the two SPDX header lines declaring the Klimpi Authors
   and the AGPL-3.0-or-later licence (or a `REUSE.toml` entry when the format can't
   hold comments), like the top of this file. The catalogue is the exception: scores

@@ -1,0 +1,34 @@
+{
+    "note": "Which work each catalogue row is, where the row cannot say so itself. `core/work.ts` derives a key from a title that carries a catalogue mark or a member number — about one row in nine — and everything here covers the rest. `aliases` renames a set the derivation found under its name to the mark it is really known by, keeping each row's member number. `sets` names a set the derivation cannot see at all, by a composer pattern and one title pattern per number, with `least` the fewest rows it may resolve to before the definition has rotted. `rulings` is the last word, keyed by song id — a content fingerprint, so a ruling outlives a re-slugging — and overrides both. Resolved by `npm run songs:bake` into public/songs/works.json; nothing here reaches a visitor's bundle.",
+    "aliases": {
+        "carl-czerny/160-eight-measure-exercises": "carl-czerny/op-821",
+        "carl-czerny/50-melodische-ubungsstucke": "carl-czerny/op-139"
+    },
+    "sets": [
+        {
+            "key": "johann-friedrich-franz-burgmuller/op-100",
+            "composer": "burgm",
+            "least": 12,
+            "members": [
+                { "number": 1, "title": "^La Candeur$" },
+                { "number": 2, "title": "Arabesque" },
+                { "number": 3, "title": "Pastorale" },
+                { "number": 4, "title": "Petite R" },
+                { "number": 5, "title": "^Innocence$" },
+                { "number": 6, "title": "^Progr" },
+                { "number": 7, "title": "limpid|Courant Limpide" },
+                { "number": 8, "title": "Gracieuse" },
+                { "number": 10, "title": "Tendre Fleur" },
+                { "number": 11, "title": "Bergeronnette" },
+                { "number": 12, "title": "^L'?Adieu$" },
+                { "number": 13, "title": "^Consolation$" },
+                { "number": 15, "title": "^Ballade$" },
+                { "number": 16, "title": "Douce Plainte" },
+                { "number": 17, "title": "Babillarde" }
+            ]
+        }
+    ],
+    "rulings": {
+        "9Cd0SL2YJ9Mz": "ludwig-van-beethoven/op-67"
+    }
+}

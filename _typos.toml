@@ -63,6 +63,10 @@ ist = "ist"
 # codes are fixed by the format (moov, trak, mdia, mdhd), and dev/clip-durations.mjs reads
 # a clip's length straight out of them.
 trak = "trak"
+# "Tema" is Italian for the theme of a set of variations, and how the catalogue titles the
+# first number of Mozart's K. 331 — the row that showed K. and KV. were being read as two
+# different works.
+tema = "tema"
 # "objekt" is Swedish for "item", one form for one and several. The singular-copies check in
 # dev/singular-copies.mjs names it as the reason the Swedish backup count may repeat itself.
 objekt = "objekt"
@@ -107,6 +111,7 @@ extend-exclude = [
     "dev/catalog-flagged.json",
     "dev/catalog-people-distinct.json",
     "dev/catalog-reach-costs.json",
+    "dev/catalog-works.json",
     "dev/people-wikidata.json",
     "dev/promo/pieces.mjs",
     "messages/*",

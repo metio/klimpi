@@ -13,7 +13,7 @@
 // make a leftover gap add up. The reported file carries exactly one such ratio; the two
 // copies the reader said sounded fine carry none. See core/transcriptionQuality.ts.
 //
-// **Duplicates** need all three of: the same composer, the same work (core/workTitle.ts,
+// **Duplicates** need all three of: the same composer, the same work (core/work.ts,
 // which holds a catalogue number apart from the name so "Für Elise" matches "Für Elise
 // WoO 59" while "Nocturnes Op.27" never matches "Nocturnes Op.9"), and the same opening
 // notes as SOUND (core/incipit.ts). All three, because any two of them are not enough:
@@ -43,7 +43,7 @@ import { decompressMxl } from "../core/musicxmlFile.ts";
 import { canonicalComposer } from "../core/person.ts";
 import { BEYOND_REPAIR, beyondThePiano } from "../core/pianoRange.ts";
 import { quantiserMarks } from "../core/transcriptionQuality.ts";
-import { sameWork, workTitle } from "../core/workTitle.ts";
+import { sameWork, workTitle } from "../core/work.ts";
 import type { SongMeta } from "../core/catalogMeta.ts";
 import { readSongs, scoreFiles, writeSongs } from "./manifest.mts";
 
